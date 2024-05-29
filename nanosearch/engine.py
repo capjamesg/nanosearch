@@ -2,7 +2,7 @@ import concurrent.futures
 import json
 import re
 from abc import ABC
-from typing import List
+from typing import List, Union
 
 import getsitemap
 import numpy as np
@@ -12,6 +12,11 @@ from rank_bm25 import BM25Okapi
 from sklearn.feature_extraction.text import TfidfVectorizer
 from urllib.parse import urlparse, urljoin
 import math
+
+REMOVE_ALL_SEPARATORS = [
+    lambda x: x.split(" | ")[0],
+    lambda x: x.split(" - ")[0],
+]
 
 def retrieve_page_text(url: str) -> str:
     try:
@@ -35,6 +40,9 @@ def get_links(content: BeautifulSoup, site: str) -> List[str]:
     """
     Retrieve all inlinks to the site on a given page.
     """
+    if not content:
+        return []
+    
     links = content.find_all("a")
     links = [link["href"] for link in links if link.get("href")]
     links = [link.split("#")[0].split("?")[0] for link in links]
@@ -42,22 +50,60 @@ def get_links(content: BeautifulSoup, site: str) -> List[str]:
     links = [urljoin(site, link) for link in links]
     return links
 
+def get_description(content: BeautifulSoup) -> str:
+    """
+    Retrieve the description of a page.
+    """
+    if not content:
+        return ""
+    
+    options = [
+        content.find("meta", attrs={"name": "description"}),
+        content.find("meta", attrs={"property": "og:description"}),
+        content.find("meta", attrs={"name": "twitter:description"}),
+    ]
+    
+    for option in options:
+        if option:
+            return option["content"]
+        
+    return ""
+
 class NanoSearch(ABC):
     def __init__(self) -> None:
        pass
 
     @classmethod
-    def from_sitemap(cls, sitemap_url: str, includes: List[str] = [], excludes: List[str] = [], title_transforms: List[callable] = []) -> None:
+    def from_sitemap(cls, sitemap_url: Union[str, List[str]],
+                     includes: List[str] = [], excludes: List[str] = [], title_transforms: List[callable] = []) -> None:
         """
         Create an index from a sitemap.
         """
         instance = cls()
-        urls = getsitemap.get_individual_sitemap(sitemap_url)
-        if not urls:
-            print("No sitemap found")
-            return None
         
-        urls = urls[sitemap_url]
+        if isinstance(sitemap_url, str):
+            sitemap_url = [sitemap_url]
+
+        all_urls = []
+        sitemap_domains = {}
+
+        for su in sitemap_url:
+            urls = getsitemap.get_individual_sitemap(su)
+
+            if not urls:
+                print("No sitemap found")
+                return None
+            
+            urls = urls[su]
+
+            all_urls.extend(urls)
+
+            site = urlparse(su).netloc
+            for u in urls:
+                sitemap_domains[u] = "https://" + site
+
+        urls = list(set(all_urls))
+        
         urls.sort()
 
         if includes:
@@ -67,9 +113,8 @@ class NanoSearch(ABC):
             urls = [url for url in urls if not any(re.match(exclude, url) for exclude in excludes)]
         
         print("Indexing", len(urls), "URLs")
-        instance.sitemap_domain = urlparse(sitemap_url).netloc
-        instance.sitemap_domain = "https://" + instance.sitemap_domain
         instance.title_transforms = title_transforms
+        instance.sitemap_domains = sitemap_domains
         instance.create_index(urls=urls)
         return instance
 
@@ -132,7 +177,9 @@ class NanoSearchTFIDF(NanoSearch):
                 for transform in self.title_transforms:
                     title = transform(title)
 
-            self.url2data[url] = {"text": results[i], "title": title, "url": url}
+            description = get_description(content[i])
+
+            self.url2data[url] = {"text": results[i], "title": title, "url": url, "description": description}
 
         self.urls = list(self.url2data.keys())
         self.create_index_object([data["text"] for data in self.url2data.values()])
@@ -189,9 +236,11 @@ class NanoSearchBM25(NanoSearch):
                 for transform in self.title_transforms:
                     title = transform(title)
 
-            self.url2data[url] = {"text": text, "title": title, "url": url}
+            description = get_description(content[i])
+
+            self.url2data[url] = {"text": text, "title": title, "url": url, "description": description}
             
-            for link in get_links(content[i], site=self.sitemap_domain):
+            for link in get_links(content[i], site=self.sitemap_domains[url]):
                 self.link_graph[link] = self.link_graph.get(link, []) + [url]
 
         for url, linked_from in self.link_graph.items():

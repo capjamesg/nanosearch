@@ -28,9 +28,10 @@ setuptools.setup(
         "rank-bm25",
         "scikit-learn",
     ],
+    entry_points={"console_scripts": ["nanosearch=nanosearch.cli:cli"]},
     include_package_data=True,
-    package_data={"": ["models.csv"]},
     packages=find_packages(exclude=("tests",)),
+    package_data={"nanosearch": ["templates/index.html"]},
     extras_require={
         "dev": [
             "flake8",

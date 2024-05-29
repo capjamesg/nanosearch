@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nanosearch</title>
+    <style>
+        * {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        html, body {
+            margin: 0;
+        }
+        label {
+            font-size: 1.2em;
+            font-weight: bold;
+            display: block;
+        }
+        input {
+            max-width: 35em;
+        }
+        body {
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-attachment: fixed;
+        }
+        ul {
+            list-style-type: disc;
+        }
+        nav {
+            color: black;
+            background-color: orange;
+            display: flex;
+        }
+        main {
+            padding: 10px;
+        }
+        nav p {
+            padding: 10px;
+            margin: 0;
+        }
+        form {
+            display: flex;
+            flex: 1;
+        }
+        form {
+            margin: 5px;
+        }
+        nav a {
+            color: black;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        main a:focus {
+            background-color: yellow;
+            color: black;
+            outline: black solid 2px;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <p><a href="/">Nanosearch</a></p>
+        <form>
+            <input type="text" label="search" name="search" id="search" placeholder="Search" value = "{{ query }}" />
+            <button type="submit">Search</button>
+        </form>
+    </nav>
+    <main>
+        {% if query %}
+            <p>Showing {{ results_count }} results for "{{ query }}"</p>
+            <ul>
+                {% for item in results %}
+                    <li><p><a href="{{ item['url'] }}">{{ item['title'] }}</a>: {{ item['description'] }}</p></li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>Search for something to get started.</p>
+        {% endif %}
+    </main>
+</body>
+</html>
